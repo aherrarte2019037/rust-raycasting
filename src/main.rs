@@ -61,8 +61,9 @@ pub fn main() {
     let args = Opts::parse();
     let mut game = Game::new(args.level);
     let mut video = Video::new(args.scale);
+    
     let mut window = Window::new(
-        "rustenstein 3D",
+        "Rust Raycasting",
         video.width as usize,
         video.height as usize,
         WindowOptions::default(),
@@ -77,7 +78,6 @@ pub fn main() {
     while process_input(&window, &mut game.player, map).is_ok() {
         draw_world(&game, &mut video);
         draw_weapon(&game, &mut video);
-        draw_status(&game, &mut video);
 
         video.present(&mut window);
     }
@@ -199,22 +199,6 @@ fn draw_weapon(game: &Game, video: &mut Video) {
     );
 }
 
-fn draw_status(game: &Game, video: &mut Video) {
-    let statuspic = game.cache.get_pic(cache::STATUSBARPIC);
-    video.draw_texture(0, video.pix_height, statuspic);
-
-    let facepic = match game.start_time.elapsed().as_secs() % 3 {
-        0 => game.cache.get_pic(cache::FACE1APIC),
-        1 => game.cache.get_pic(cache::FACE1BPIC),
-        2 => game.cache.get_pic(cache::FACE1CPIC),
-        _ => unreachable!(),
-    };
-
-    let shift_x = video.pix_width / 2 - facepic.width * video.scale;
-    let shift_y = video.pix_height + facepic.height * video.scale / 8;
-    video.draw_texture(shift_x, shift_y, facepic);
-}
-
 impl Game {
     pub fn new(level: usize) -> Self {
         let level = level - 1;
@@ -262,17 +246,27 @@ impl Video {
     }
 
     pub fn put_darkened_pixel(&mut self, x: u32, y: u32, color_index: usize, lightness: u32) {
+        if x >= self.width || y >= self.height {
+            return;
+        }
+        
         let offset = (y * self.width + x) as usize;
+        
+        if offset >= self.buffer.len() {
+            return;
+        }
+    
         let (r, g, b) = self.color_map[color_index as usize];
-
+    
         let factor =
             std::cmp::min(lightness, self.pix_center) as f64 / self.pix_center as f64 / DARKNESS;
         let r = (r as f64 * factor) as u8 as u32;
         let g = (g as f64 * factor) as u8 as u32;
         let b = (b as f64 * factor) as u8 as u32;
-
+    
         self.buffer[offset] = (r << 16) | (g << 8) | b;
     }
+    
 
     pub fn present(&self, window: &mut Window) {
         window
