@@ -3,9 +3,7 @@ use crate::player::{SideMovement, StraightMovement, TurnMovement};
 use cache::Picture;
 use core::slice::Iter;
 use std::time::Instant;
-
 use clap::Parser;
-
 use minifb::{Key, KeyRepeat, Window, WindowOptions};
 
 mod cache;
@@ -27,18 +25,14 @@ const VGA_CEILING_COLORS: [usize; 60] = [
 
 const DARKNESS: f64 = 0.75;
 
-/// Run Wolfenstein 3D
 #[derive(Parser, Debug)]
 struct Opts {
-    /// The scale factor to use for the resolution. 1 means 320x200, 2 640x400, etc.
     #[clap(short, long, default_value="3", possible_values=["1","2","3","4","5"])]
     scale: u32,
 
-    /// Game difficulty level, 0=baby, 1=easy, 2=normal, 3=hard
     #[clap(short, long, default_value="0", possible_values=["0", "1","2","3"])]
     dificulty: usize,
 
-    /// Level to load. Only the shareware episode levels are supported for now.
     #[clap(short, long, default_value="1", possible_values=["1","2","3","4","5","6","7","8","9","10"])]
     level: usize,
 }
@@ -75,7 +69,6 @@ pub fn main() {
     )
     .unwrap();
 
-    // Limit to max ~60 fps update rate
     window.limit_update_rate(Some(std::time::Duration::from_micros(16600)));
 
     show_title(&game, &mut video, &mut window);
@@ -109,7 +102,6 @@ fn process_input(
 
     if window.is_key_down(Key::Left) || window.is_key_down(Key::A) {
         if window.is_key_down(Key::X) {
-            // alternate from turning to strafing
             side = Some(SideMovement::StrafeLeft);
         } else {
             turn = Some(TurnMovement::TurnLeft);
@@ -118,7 +110,6 @@ fn process_input(
 
     if window.is_key_down(Key::Right) || window.is_key_down(Key::D) {
         if window.is_key_down(Key::X) {
-            // alternate from turning to strafing
             side = Some(SideMovement::StrafeRight);
         } else {
             turn = Some(TurnMovement::TurnRight);
@@ -150,18 +141,15 @@ fn show_title(game: &Game, video: &mut Video, window: &mut Window) {
     let titlepic = game.cache.get_pic(cache::TITLEPIC);
     video.draw_texture(0, 0, titlepic);
 
-    // wait for input
     while window.get_keys_pressed(KeyRepeat::No).is_empty() {
         video.present(window);
     }
 }
 
 fn draw_world(game: &Game, video: &mut Video) {
-    // TODO consider passing game as param here
     let ray_hits =
         ray_caster::draw_rays(video.pix_width, video.pix_height, &game.map, &game.player);
 
-    // draw floor and ceiling
     for x in 0..video.pix_width {
         for y in 0..video.pix_height / 2 {
             video.put_darkened_pixel(x, y, VGA_CEILING_COLORS[game.level], video.pix_center - y);
@@ -174,8 +162,6 @@ fn draw_world(game: &Game, video: &mut Video) {
     for x in 0..video.pix_width {
         let hit = &ray_hits[x as usize];
 
-        // convert tile number to wall pic
-        // accept-the-mystery
         let wallpic = if hit.horizontal {
             (hit.tile - 1) * 2
         } else {
@@ -184,11 +170,6 @@ fn draw_world(game: &Game, video: &mut Video) {
         let texture = game.cache.get_texture(wallpic as usize);
 
         let current = ray_hits[x as usize].height as i32;
-
-        // tex_x is where the ray hit within the texture, indicates which part
-        // of the texture should be displayed for this given pixel column
-        // Need to multiply for width to get the correct row in the matrix
-        // for this column
         let xoff = hit.tex_x * WALLPIC_WIDTH;
 
         let step = WALLPIC_WIDTH as f64 / 2.0 / current as f64;
@@ -208,10 +189,8 @@ fn draw_world(game: &Game, video: &mut Video) {
 }
 
 fn draw_weapon(game: &Game, video: &mut Video) {
-    // FIXME use a constant for that 209
     let (weapon_shape, weapon_data) = game.cache.get_sprite(209);
 
-    // TODO pass the shape num instead of pieces of the shape
     video.simple_scale_shape(
         weapon_shape.left_pix,
         weapon_shape.right_pix,
@@ -246,7 +225,6 @@ impl Game {
             cache,
             map,
             player,
-            // we only support episode 0 for now -- the shareware one
             episode: 0,
             level,
             start_time: Instant::now(),
@@ -280,7 +258,6 @@ impl Video {
         let (r, g, b) = self.color_map[color_index as usize];
         let (r, g, b) = (r as u32, g as u32, b as u32);
 
-        // convert rgb to u32
         self.buffer[offset] = (r << 16) | (g << 8) | b;
     }
 
@@ -288,7 +265,6 @@ impl Video {
         let offset = (y * self.width + x) as usize;
         let (r, g, b) = self.color_map[color_index as usize];
 
-        // apply a darkness factor based on distance from the center
         let factor =
             std::cmp::min(lightness, self.pix_center) as f64 / self.pix_center as f64 / DARKNESS;
         let r = (r as f64 * factor) as u8 as u32;
@@ -339,8 +315,6 @@ impl Video {
         let pixheight = scale * sprite_scale_factor;
         let actx = xcenter - scale;
         let upperedge = self.pix_height / 2 - scale;
-        // cmdptr=(word *) shape->dataofs;
-        // cmdptr = iter(shape.dataofs)
         let mut cmdptr = dataofs.iter();
 
         let mut i = left_pix;
@@ -418,8 +392,6 @@ impl Video {
     }
 }
 
-/// Returns an array of colors that maps indexes as used by wolf3d graphics
-/// to r,g,b color tuples that can be used to write pixels into sdl surfaces/textures.
 fn build_color_map() -> ColorMap {
     let palette = [
         (0, 0, 0),
