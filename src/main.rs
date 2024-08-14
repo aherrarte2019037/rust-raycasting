@@ -4,6 +4,9 @@ use cache::Picture;
 use clap::Parser;
 use core::slice::Iter;
 use minifb::{Key, KeyRepeat, Window, WindowOptions};
+use rodio::{source::Source, Decoder, OutputStream};
+use std::fs::File;
+use std::io::BufReader;
 use std::time::{Duration, Instant};
 
 mod cache;
@@ -78,6 +81,12 @@ pub fn main() {
     let mut last_time = Instant::now();
     let mut frame_count = 0;
     let mut fps = 0;
+
+    let (_stream, stream_handle) = OutputStream::try_default().unwrap();
+    let file = BufReader::new(File::open("data/background-music.ogg").unwrap());
+    let source = Decoder::new(file).unwrap();
+    let _ = stream_handle.play_raw(source.convert_samples());
+    std::thread::sleep(std::time::Duration::from_millis(100));
 
     while process_input(&window, &mut game.player, map).is_ok() {
         let now = Instant::now();
