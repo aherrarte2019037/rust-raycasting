@@ -2,6 +2,8 @@
 use crate::player::{SideMovement, StraightMovement, TurnMovement};
 use cache::Picture;
 use clap::Parser;
+use map::{Map, Tile};
+use player::Player;
 use core::slice::Iter;
 use minifb::{Key, KeyRepeat, Window, WindowOptions};
 use rodio::{source::Source, Decoder, OutputStream};
@@ -101,6 +103,7 @@ pub fn main() {
         draw_world(&game, &mut video);
         draw_weapon(&game, &mut video);
 
+        video.draw_minimap(&game.map, &game.player, 2);
         video.draw_fps_counter(fps);
         video.present(&mut window);
     }
@@ -461,6 +464,45 @@ impl Video {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    pub fn draw_minimap(&mut self, map: &Map, player: &Player, minimap_scale: u32) {
+        let minimap_size = 128;
+        let map_width = MAP_WIDTH as u32;
+        let map_height = MAP_HEIGHT as u32;
+
+        let minimap_x = self.width - minimap_size - 10;
+        let minimap_y = 10;
+
+        for y in 0..map_height {
+            for x in 0..map_width {
+                let tile = map.tile_at(x as u8, y as u8);
+                let color_index = match tile {
+                    Tile::Wall(_) => 255,
+                    Tile::Floor | Tile::Door { .. } => 0,
+                };
+
+                let screen_x = minimap_x + x * minimap_scale;
+                let screen_y = minimap_y + y * minimap_scale;
+
+                for i in 0..minimap_scale {
+                    for j in 0..minimap_scale {
+                        self.put_pixel(screen_x + i, screen_y + j, color_index);
+                    }
+                }
+            }
+        }
+
+        let player_x = player.x as u32 / MAP_SCALE_W * minimap_scale + minimap_x;
+        let player_y = player.y as u32 / MAP_SCALE_H * minimap_scale + minimap_y;
+
+        let player_color_index = 10;
+
+        for i in 0..minimap_scale {
+            for j in 0..minimap_scale {
+                self.put_pixel(player_x + i, player_y + j, player_color_index);
             }
         }
     }
