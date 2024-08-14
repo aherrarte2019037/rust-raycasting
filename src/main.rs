@@ -1,10 +1,10 @@
 #![allow(dead_code)]
 use crate::player::{SideMovement, StraightMovement, TurnMovement};
 use cache::Picture;
-use core::slice::Iter;
-use std::time::Instant;
 use clap::Parser;
+use core::slice::Iter;
 use minifb::{Key, KeyRepeat, Window, WindowOptions};
+use std::time::{Duration, Instant};
 
 mod cache;
 type ColorMap = [(u8, u8, u8); 256];
@@ -61,7 +61,7 @@ pub fn main() {
     let args = Opts::parse();
     let mut game = Game::new(args.level);
     let mut video = Video::new(args.scale);
-    
+
     let mut window = Window::new(
         "Rust Raycasting",
         video.width as usize,
@@ -75,10 +75,24 @@ pub fn main() {
     show_title(&game, &mut video, &mut window);
     let map = &game.map;
 
+    let mut last_time = Instant::now();
+    let mut frame_count = 0;
+    let mut fps = 0;
+
     while process_input(&window, &mut game.player, map).is_ok() {
+        let now = Instant::now();
+        frame_count += 1;
+
+        if now.duration_since(last_time) >= Duration::from_secs(1) {
+            fps = frame_count;
+            frame_count = 0;
+            last_time = now;
+        }
+
         draw_world(&game, &mut video);
         draw_weapon(&game, &mut video);
 
+        video.draw_fps_counter(fps);
         video.present(&mut window);
     }
 }
@@ -238,35 +252,45 @@ impl Video {
     }
 
     pub fn put_pixel(&mut self, x: u32, y: u32, color_index: usize) {
-        let offset = (y * self.width + x) as usize;
-        let (r, g, b) = self.color_map[color_index as usize];
-        let (r, g, b) = (r as u32, g as u32, b as u32);
+        if x >= self.width || y >= self.height {
+            return;
+        }
 
-        self.buffer[offset] = (r << 16) | (g << 8) | b;
+        if color_index >= self.color_map.len() {
+            return;
+        }
+
+        let offset = (y * self.width + x) as usize;
+
+        if offset < self.buffer.len() {
+            let (r, g, b) = self.color_map[color_index];
+            let (r, g, b) = (r as u32, g as u32, b as u32);
+
+            self.buffer[offset] = (r << 16) | (g << 8) | b;
+        }
     }
 
     pub fn put_darkened_pixel(&mut self, x: u32, y: u32, color_index: usize, lightness: u32) {
         if x >= self.width || y >= self.height {
             return;
         }
-        
+
         let offset = (y * self.width + x) as usize;
-        
+
         if offset >= self.buffer.len() {
             return;
         }
-    
+
         let (r, g, b) = self.color_map[color_index as usize];
-    
+
         let factor =
             std::cmp::min(lightness, self.pix_center) as f64 / self.pix_center as f64 / DARKNESS;
         let r = (r as f64 * factor) as u8 as u32;
         let g = (g as f64 * factor) as u8 as u32;
         let b = (b as f64 * factor) as u8 as u32;
-    
+
         self.buffer[offset] = (r << 16) | (g << 8) | b;
     }
-    
 
     pub fn present(&self, window: &mut Window) {
         window
@@ -382,6 +406,53 @@ impl Video {
                 }
             }
             i += 1;
+        }
+    }
+
+    pub fn draw_fps_counter(&mut self, fps: usize) {
+        let x = 5;
+        let y = 5;
+        let scale = 2;
+
+        for (i, digit) in fps.to_string().chars().enumerate() {
+            self.draw_digit(x + i as u32 * 4 * scale, y, digit as u8 - '0' as u8, scale);
+        }
+    }
+
+    pub fn draw_digit(&mut self, x: u32, y: u32, digit: u8, scale: u32) {
+        const DIGITS: [[u8; 5]; 10] = [
+            [0b111, 0b101, 0b101, 0b101, 0b111],
+            [0b010, 0b110, 0b010, 0b010, 0b111],
+            [0b111, 0b001, 0b111, 0b100, 0b111],
+            [0b111, 0b001, 0b111, 0b001, 0b111],
+            [0b101, 0b101, 0b111, 0b001, 0b001],
+            [0b111, 0b100, 0b111, 0b001, 0b111],
+            [0b111, 0b100, 0b111, 0b101, 0b111],
+            [0b111, 0b001, 0b001, 0b001, 0b001],
+            [0b111, 0b101, 0b111, 0b101, 0b111],
+            [0b111, 0b101, 0b111, 0b001, 0b111],
+        ];
+
+        if digit > 9 {
+            return;
+        }
+
+        let pattern = DIGITS[digit as usize];
+
+        for (dy, row) in pattern.iter().enumerate() {
+            for dx in 0..3 {
+                if row & (1 << (2 - dx)) != 0 {
+                    for sy in 0..scale {
+                        for sx in 0..scale {
+                            self.put_pixel(
+                                x + dx as u32 * scale + sx,
+                                y + dy as u32 * scale + sy,
+                                255,
+                            );
+                        }
+                    }
+                }
+            }
         }
     }
 }
